@@ -22,7 +22,7 @@ A macOS menubar app that switches keyboard focus between monitors by tracking wh
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install opencv-python mediapipe rumps pynput screeninfo pyobjc
+pip install -r requirements.txt
 ```
 
 The MediaPipe face landmarker model (~3 MB) is downloaded automatically to `~/.focusshift/face_landmarker.task` on first run.

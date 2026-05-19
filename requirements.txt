@@ -1,0 +1,10 @@
+mediapipe>=0.10
+opencv-python>=4.9
+numpy>=1.26
+rumps>=0.4
+pynput>=1.7
+screeninfo>=0.8
+pyobjc-framework-Quartz>=10.0
+pyobjc-framework-AppKit>=10.0
+pyobjc-framework-ApplicationServices>=10.0
+pyobjc-framework-AVFoundation>=10.0
