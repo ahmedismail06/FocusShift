@@ -2,21 +2,37 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
+import sys
 import threading
 import time
+from pathlib import Path
 
 import cv2
 import rumps
 
-from .monitor_check import (
-    get_monitors,
-    get_monitors_sorted,
-    is_multi_monitor,
-    is_vertical_layout,
-)
-from .tracker import HeadTracker
-from .switcher import WindowSwitcher
+try:
+    from .monitor_check import (
+        get_monitors,
+        get_monitors_sorted,
+        is_multi_monitor,
+        is_vertical_layout,
+    )
+    from .tracker import HeadTracker
+    from .switcher import WindowSwitcher
+except ImportError:
+    from monitor_check import (  # type: ignore[no-redef]
+        get_monitors,
+        get_monitors_sorted,
+        is_multi_monitor,
+        is_vertical_layout,
+    )
+    from tracker import HeadTracker  # type: ignore[no-redef]
+    from switcher import WindowSwitcher  # type: ignore[no-redef]
+
+_CAMERA_CONFIG = Path.home() / ".focusshift" / "config.json"
 
 _DWELL_S = 0.1
 _INPUT_SUPPRESSION_S = 1.5
@@ -39,6 +55,18 @@ _DEBUG = os.environ.get("FOCUSSHIFT_DEBUG", "").strip().lower() in {
 def _debug(msg: str) -> None:
     if _DEBUG:
         print(f"[FocusShift:rewrite] {msg}", flush=True)
+
+
+def _load_camera_config() -> int | None:
+    try:
+        return int(json.loads(_CAMERA_CONFIG.read_text())["camera_index"])
+    except Exception:
+        return None
+
+
+def _save_camera_config(idx: int) -> None:
+    _CAMERA_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    _CAMERA_CONFIG.write_text(json.dumps({"camera_index": idx}))
 
 
 def _av_camera_names() -> list[str]:
@@ -77,17 +105,31 @@ def _enumerate_working_cameras(max_idx: int = 5) -> list[tuple[int, str, tuple[i
     return cameras
 
 
-def _pick_camera_index() -> int | None:
+def _pick_camera_index(force: bool = False) -> int | None:
+    if not force:
+        saved = _load_camera_config()
+        if saved is not None:
+            return saved
+
     cameras = _enumerate_working_cameras()
     if not cameras:
         return None
+
     if len(cameras) == 1:
         idx, name, size = cameras[0]
         print(
             f"[FocusShift] Using only available camera: {name} ({size[0]}x{size[1]}) [index {idx}]",
             flush=True,
         )
+        _save_camera_config(idx)
         return idx
+
+    if not sys.stdin.isatty():
+        idx = cameras[0][0]
+        print(f"[FocusShift] No TTY — defaulting to first camera (index {idx}).", flush=True)
+        _save_camera_config(idx)
+        return idx
+
     print("\nAvailable cameras:")
     for offset, (idx, name, size) in enumerate(cameras):
         print(f"  [{offset}] {name} {size[0]}x{size[1]} (cv index {idx})")
@@ -95,15 +137,21 @@ def _pick_camera_index() -> int | None:
         try:
             raw = input(f"Pick a camera [0-{len(cameras) - 1}, default 0]: ").strip()
         except (EOFError, KeyboardInterrupt):
-            return cameras[0][0]
+            idx = cameras[0][0]
+            _save_camera_config(idx)
+            return idx
         if raw == "":
-            return cameras[0][0]
+            idx = cameras[0][0]
+            _save_camera_config(idx)
+            return idx
         try:
             choice = int(raw)
         except ValueError:
             choice = -1
         if 0 <= choice < len(cameras):
-            return cameras[choice][0]
+            idx = cameras[choice][0]
+            _save_camera_config(idx)
+            return idx
         print(f"  Enter 0-{len(cameras) - 1}.")
 
 
@@ -437,6 +485,22 @@ class FocusShiftRewriteApp(rumps.App):
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="FocusShift — gaze-driven monitor switcher")
+    parser.add_argument(
+        "--select-camera",
+        action="store_true",
+        help="Re-run camera selection, save the choice, and exit",
+    )
+    args = parser.parse_args()
+
+    if args.select_camera:
+        idx = _pick_camera_index(force=True)
+        if idx is None:
+            print("[FocusShift] No working camera found.", flush=True)
+        else:
+            print(f"[FocusShift] Camera {idx} saved to {_CAMERA_CONFIG}.", flush=True)
+        return
+
     camera_index = _pick_camera_index()
     if camera_index is None:
         print("[FocusShift] No working camera found.", flush=True)

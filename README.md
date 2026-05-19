@@ -1,4 +1,4 @@
-# FocusShift Rewrite
+# FocusShift
 
 A macOS menubar app that switches keyboard focus between monitors by tracking where you look, using your webcam and MediaPipe face landmarks.
 
@@ -6,7 +6,7 @@ A macOS menubar app that switches keyboard focus between monitors by tracking wh
 
 1. The camera captures your face at 640×480.
 2. `HeadTracker` extracts yaw/pitch from the facial transformation matrix and iris position relative to each eye's bounding box.
-3. A combined gaze score is computed and mapped to a monitor index. On a two-monitor horizontal layout, gaze left → left monitor, gaze right → right monitor. Vertical layouts use pitch.
+3. A combined gaze score is mapped to a monitor index. On a two-monitor horizontal layout, gaze left → left monitor, gaze right → right monitor. Vertical layouts use pitch.
 4. A 100 ms dwell guard fires before any switch, so accidental glances are ignored.
 5. `WindowSwitcher` uses Quartz to scan visible windows, then AppKit + Accessibility APIs to activate the target app and raise its window.
 6. Keyboard, click, and scroll events suppress switching for 1.5 seconds and sync the current-screen state so a manual focus switch is never overridden mid-interaction.
@@ -17,26 +17,39 @@ A macOS menubar app that switches keyboard focus between monitors by tracking wh
 - Python 3.11+
 - Webcam
 
-## Installation
+## Install (runs on login automatically)
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/ahmedismail06/FocusShift.git
+cd FocusShift
+./install.sh
 ```
 
-The MediaPipe face landmarker model (~3 MB) is downloaded automatically to `~/.focusshift/face_landmarker.task` on first run.
+`install.sh` will:
+1. Create a `.venv` and install all dependencies
+2. Prompt you to pick a camera (once — saved to `~/.focusshift/config.json`)
+3. Register a LaunchAgent so FocusShift starts automatically on every login
 
-Grant the app **Accessibility** and **Camera** permissions in System Settings when prompted.
+Grant **Accessibility** and **Camera** permissions in System Settings when prompted.
 
-## Running
+## Managing the service
+
+```bash
+./focusshift.sh start          # Start FocusShift
+./focusshift.sh stop           # Stop it (restarts on next login)
+./focusshift.sh restart        # Restart
+./focusshift.sh status         # Show running status
+./focusshift.sh logs           # Stream live logs
+./focusshift.sh reset-camera   # Re-run camera selection and restart
+./focusshift.sh uninstall      # Remove the LaunchAgent entirely
+```
+
+## Running manually (without the LaunchAgent)
 
 ```bash
 source .venv/bin/activate
-python -m focusshift_rewrite.main
+python run.py
 ```
-
-If multiple cameras are detected, you will be prompted to pick one. After that, the app lives in the menubar.
 
 ## Menubar
 
@@ -68,14 +81,19 @@ All tunables are constants at the top of `main.py`:
 Enable verbose logging:
 
 ```bash
-FOCUSSHIFT_DEBUG=1 python -m focusshift_rewrite.main
+FOCUSSHIFT_DEBUG=1 python run.py
 ```
+
+Camera preference is stored at `~/.focusshift/config.json`. Delete it or run `./focusshift.sh reset-camera` to re-select.
 
 ## Module overview
 
 | File | Purpose |
 |---|---|
+| `run.py` | Standalone entry point (used by the LaunchAgent and manual runs) |
 | `main.py` | `FocusShiftRewriteApp` — rumps menubar app, tracking loop, gaze → screen mapping |
 | `tracker.py` | `HeadTracker` — MediaPipe face landmarker wrapper; returns `(yaw, pitch, iris_x, iris_y)` |
 | `switcher.py` | `WindowSwitcher` — Quartz window scan, AppKit activation, AX raise |
 | `monitor_check.py` | Thin wrapper around `screeninfo` for monitor enumeration and layout detection |
+| `install.sh` | One-time setup: venv, deps, camera selection, LaunchAgent registration |
+| `focusshift.sh` | Service controller: start, stop, restart, status, logs, reset-camera, uninstall |
