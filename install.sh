@@ -3,7 +3,8 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV="$REPO/.venv"
+VENV="$HOME/.focusshift/venv"
+APP_DIR="$HOME/.focusshift/app"
 LOG_DIR="$HOME/.focusshift/logs"
 PLIST="$HOME/Library/LaunchAgents/com.focusshift.app.plist"
 
@@ -21,15 +22,19 @@ echo "→ Installing dependencies..."
 "$VENV/bin/pip" install -q --upgrade pip
 "$VENV/bin/pip" install -q -r "$REPO/requirements.txt"
 
-# 2. Log / config dirs
-mkdir -p "$LOG_DIR" "$HOME/.focusshift"
+# 2. Copy source to ~/.focusshift/app (launchd can't read ~/Desktop without FDA)
+mkdir -p "$APP_DIR" "$LOG_DIR"
+cp "$REPO"/__init__.py "$REPO"/main.py "$REPO"/tracker.py \
+   "$REPO"/switcher.py "$REPO"/monitor_check.py "$REPO"/run.py \
+   "$APP_DIR/"
+echo "→ Source copied to $APP_DIR"
 
 # 3. Camera selection (interactive, only if no saved config)
 CONFIG="$HOME/.focusshift/config.json"
 if [ ! -f "$CONFIG" ]; then
     echo ""
     echo "=== Camera Setup (runs once) ==="
-    "$VENV/bin/python" "$REPO/run.py" --select-camera
+    "$VENV/bin/python" "$APP_DIR/run.py" --select-camera
     echo ""
 fi
 
@@ -46,7 +51,7 @@ cat > "$PLIST" <<PLIST_EOF
     <key>ProgramArguments</key>
     <array>
         <string>$VENV/bin/python</string>
-        <string>$REPO/run.py</string>
+        <string>$APP_DIR/run.py</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

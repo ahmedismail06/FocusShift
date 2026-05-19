@@ -4,7 +4,8 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV="$REPO/.venv"
+VENV="$HOME/.focusshift/venv"
+APP_DIR="$HOME/.focusshift/app"
 PLIST="$HOME/Library/LaunchAgents/com.focusshift.app.plist"
 LOG_DIR="$HOME/.focusshift/logs"
 LABEL="com.focusshift.app"
@@ -65,7 +66,7 @@ case "${1:-help}" in
 
     reset-camera)
         echo "=== Re-selecting camera ==="
-        "$VENV/bin/python" "$REPO/run.py" --select-camera
+        "$VENV/bin/python" "$APP_DIR/run.py" --select-camera
         echo ""
         if _is_loaded; then
             launchctl unload "$PLIST" 2>/dev/null || true
